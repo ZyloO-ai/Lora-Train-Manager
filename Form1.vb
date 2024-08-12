@@ -610,50 +610,75 @@ Public Class Form1
     End Sub
 
     Private Sub BtnNew_Click(sender As Object, e As EventArgs) Handles BtnNew.Click
-        'Get the selected node
+        ' Get the selected node
         If TreeView1.SelectedNode IsNot Nothing Then
             Dim selectedFolder As JToken = CType(TreeView1.SelectedNode.Tag, JToken)
             Dim parentFolderPath As String = selectedFolder("path").ToString()
 
-            'Check if the parent folder contains "img", "log", and "model" folders
+            ' Check if the parent folder contains "img", "log", and "model" folders
             If Directory.Exists(Path.Combine(parentFolderPath, "img")) OrElse
-               Directory.Exists(Path.Combine(parentFolderPath, "log")) OrElse
-               Directory.Exists(Path.Combine(parentFolderPath, "model")) Then
+           Directory.Exists(Path.Combine(parentFolderPath, "log")) OrElse
+           Directory.Exists(Path.Combine(parentFolderPath, "model")) Then
                 MessageBox.Show("Cannot create a new folder. Please select a parent folder.")
                 Return
             End If
 
-            'Prompt for the new folder name
+            ' Show custom folder type dialog
+            Dim folderTypeDialog As New FolderTypeDialog()
+            Dim dialogResult As DialogResult = folderTypeDialog.ShowDialog()
+
+            ' Handle Cancel
+            If dialogResult = DialogResult.Cancel Then
+                Return
+            End If
+
+            ' Prompt for the new folder name
             Dim newFolderName As String = InputBox("Enter the name for the new folder:", "New Folder")
             If String.IsNullOrEmpty(newFolderName) Then
                 MessageBox.Show("Folder name cannot be empty.")
                 Return
             End If
 
-            'Create the new folder with the specific structure
+            ' Create the new folder
             Try
                 Dim newFolderPath As String = Path.Combine(parentFolderPath, newFolderName)
                 Directory.CreateDirectory(newFolderPath)
-                Directory.CreateDirectory(Path.Combine(newFolderPath, "img"))
-                Directory.CreateDirectory(Path.Combine(newFolderPath, "log"))
-                Directory.CreateDirectory(Path.Combine(newFolderPath, "model"))
 
-                'Create a placeholder subfolder inside the "img" folder
-                Directory.CreateDirectory(Path.Combine(newFolderPath, "img", "repeats_subject"))
+                ' Initialize the JSON object
+                Dim newFolderJson As JObject
 
-                'Update the JSON structure
-                Dim newFolderJson As New JObject(
+                ' If the user selected Dataset, create the subfolders and include "state"
+                If dialogResult = DialogResult.No Then
+                    Directory.CreateDirectory(Path.Combine(newFolderPath, "img"))
+                    Directory.CreateDirectory(Path.Combine(newFolderPath, "log"))
+                    Directory.CreateDirectory(Path.Combine(newFolderPath, "model"))
+
+                    ' Create a placeholder subfolder inside the "img" folder
+                    Directory.CreateDirectory(Path.Combine(newFolderPath, "img", "repeats_subject"))
+
+                    ' Create the JSON object with "state"
+                    newFolderJson = New JObject(
                     New JProperty("name", newFolderName),
                     New JProperty("path", newFolderPath),
                     New JProperty("state", "pending"),
                     New JProperty("children", New JArray())
                 )
+                Else
+                    ' Create the JSON object without "state" for Parent folder
+                    newFolderJson = New JObject(
+                    New JProperty("name", newFolderName),
+                    New JProperty("path", newFolderPath),
+                    New JProperty("children", New JArray())
+                )
+                End If
+
+                ' Update the JSON structure
                 CType(selectedFolder("children"), JArray).Add(newFolderJson)
 
-                'Save the updated JSON back to the file
+                ' Save the updated JSON back to the file
                 File.WriteAllText(configFilePath, config.ToString(Formatting.Indented))
 
-                'Update the tree view
+                ' Update the tree view
                 PopulateTreeView(config("tree"))
 
                 MessageBox.Show("New folder structure created and tree updated successfully.")
@@ -815,4 +840,56 @@ Public Class Form1
         CheckAndUpdateFolderTree()
     End Sub
 End Class
+Public Class FolderTypeDialog
+    Inherits Form
+
+    Private btnParent As System.Windows.Forms.Button
+    Private btnDataset As System.Windows.Forms.Button
+    Private btnCancel As System.Windows.Forms.Button
+
+    Public Sub New()
+        Me.Text = "Select Folder Type"
+        Me.StartPosition = FormStartPosition.CenterParent
+        Me.FormBorderStyle = FormBorderStyle.FixedDialog
+        Me.MaximizeBox = False
+        Me.MinimizeBox = False
+        Me.ShowInTaskbar = False
+        Me.Size = New Size(300, 150)
+
+        btnParent = New System.Windows.Forms.Button()
+        btnParent.Text = "Parent"
+        btnParent.Location = New Point(20, 50)
+        AddHandler btnParent.Click, AddressOf btnParent_Click
+
+        btnDataset = New System.Windows.Forms.Button()
+        btnDataset.Text = "Dataset"
+        btnDataset.Location = New Point(100, 50)
+        AddHandler btnDataset.Click, AddressOf btnDataset_Click
+
+        btnCancel = New System.Windows.Forms.Button()
+        btnCancel.Text = "Cancel"
+        btnCancel.Location = New Point(180, 50)
+        AddHandler btnCancel.Click, AddressOf btnCancel_Click
+
+        Me.Controls.Add(btnParent)
+        Me.Controls.Add(btnDataset)
+        Me.Controls.Add(btnCancel)
+    End Sub
+
+    Private Sub btnParent_Click(sender As Object, e As EventArgs)
+        Me.DialogResult = DialogResult.Yes
+        Me.Close()
+    End Sub
+
+    Private Sub btnDataset_Click(sender As Object, e As EventArgs)
+        Me.DialogResult = DialogResult.No
+        Me.Close()
+    End Sub
+
+    Private Sub btnCancel_Click(sender As Object, e As EventArgs)
+        Me.DialogResult = DialogResult.Cancel
+        Me.Close()
+    End Sub
+End Class
+
 
