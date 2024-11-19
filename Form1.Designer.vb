@@ -46,7 +46,6 @@ Partial Class Form1
         BtnChangeRootFolder = New Button()
         BtnChangeKohyaFolder = New Button()
         BtnChangeTaggerFolder = New Button()
-        BtnUpdate = New Button()
         underline = New Label()
         LabelSelectedFolder = New Label()
         SuspendLayout()
@@ -325,18 +324,6 @@ Partial Class Form1
         BtnChangeTaggerFolder.Text = "🔄️"
         BtnChangeTaggerFolder.UseVisualStyleBackColor = False
         ' 
-        ' BtnUpdate
-        ' 
-        BtnUpdate.BackColor = Color.DeepSkyBlue
-        BtnUpdate.FlatStyle = FlatStyle.Flat
-        BtnUpdate.Font = New Font("Cascadia Code", 12F, FontStyle.Regular, GraphicsUnit.Point)
-        BtnUpdate.Location = New Point(332, 10)
-        BtnUpdate.Name = "BtnUpdate"
-        BtnUpdate.Size = New Size(93, 30)
-        BtnUpdate.TabIndex = 23
-        BtnUpdate.Text = "Refresh"
-        BtnUpdate.UseVisualStyleBackColor = False
-        ' 
         ' underline
         ' 
         underline.AutoSize = True
@@ -373,7 +360,6 @@ Partial Class Form1
         ClientSize = New Size(597, 721)
         Controls.Add(LabelSelectedFolder)
         Controls.Add(underline)
-        Controls.Add(BtnUpdate)
         Controls.Add(BtnChangeTaggerFolder)
         Controls.Add(BtnChangeKohyaFolder)
         Controls.Add(BtnChangeRootFolder)
@@ -430,7 +416,6 @@ Partial Class Form1
     Friend WithEvents BtnChangeRootFolder As Button
     Friend WithEvents BtnChangeKohyaFolder As Button
     Friend WithEvents BtnChangeTaggerFolder As Button
-    Friend WithEvents BtnUpdate As Button
     Friend WithEvents underline As Label
     Friend WithEvents LabelSelectedFolder As Label
 End Class

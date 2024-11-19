@@ -68,22 +68,28 @@ Public Class Form1
     End Function
 
     Private Sub PopulateTreeView(folderTree As JToken)
-        'Save the expanded state of the tree nodes
+        ' Save the expanded state of the tree nodes
         Dim expandedNodes As New List(Of String)
         SaveExpandedNodes(TreeView1.Nodes, expandedNodes)
 
-        'Clear existing nodes
+        ' Clear existing nodes
         TreeView1.Nodes.Clear()
 
-        'Recursively add nodes from the folder tree JSON
-        AddTreeNodes(folderTree, Nothing)
+        ' Add the root node
+        Dim rootNode As New TreeNode(folderTree("name").ToString())
+        rootNode.Tag = folderTree ' Store the JSON object in the Tag property
+        TreeView1.Nodes.Add(rootNode)
 
-        'Restore the expanded state of the tree nodes
+        ' Recursively add child nodes to the root
+        AddTreeNodes(folderTree, rootNode)
+
+        ' Restore the expanded state of the tree nodes
         RestoreExpandedNodes(TreeView1.Nodes, expandedNodes)
 
-        'Add event handler for AfterSelect event
+        ' Add event handler for AfterSelect event
         AddHandler TreeView1.AfterSelect, AddressOf TreeView1_AfterSelect
     End Sub
+
 
     Private Sub AddTreeNodes(folderTree As JToken, parentNode As TreeNode)
         For Each folder As JToken In folderTree("children")
@@ -92,27 +98,30 @@ Public Class Form1
             Dim nodeState As String = If(folder("state") IsNot Nothing, folder("state").ToString(), "")
 
             Dim directoryNode As New TreeNode(nodeName)
-            directoryNode.Tag = folder 'Store the JSON object in the Tag property for later use
+            directoryNode.Tag = folder ' Store the JSON object in the Tag property for later use
 
-            'Set background color based on state
-            If nodeState = "pending" Then
-                directoryNode.BackColor = Color.PaleVioletRed
-            ElseIf nodeState = "done" Then
-                directoryNode.BackColor = Color.LightSeaGreen
-            ElseIf nodeState = "retrain" Then
-                directoryNode.BackColor = Color.Orange
-            End If
+            ' Set background color based on state
+            Select Case nodeState
+                Case "pending"
+                    directoryNode.BackColor = Color.PaleVioletRed
+                Case "done"
+                    directoryNode.BackColor = Color.LightSeaGreen
+                Case "retrain"
+                    directoryNode.BackColor = Color.Orange
+            End Select
 
+            ' Add the node to the parent
             If parentNode Is Nothing Then
                 TreeView1.Nodes.Add(directoryNode)
             Else
                 parentNode.Nodes.Add(directoryNode)
             End If
 
-            'Recursively add child nodes
+            ' Recursively add child nodes
             AddTreeNodes(folder, directoryNode)
         Next
     End Sub
+
 
     Private Sub TreeView1_AfterSelect(sender As Object, e As TreeViewEventArgs)
         'Get the selected node's JSON object from the Tag property
@@ -615,80 +624,111 @@ Public Class Form1
             Dim selectedFolder As JToken = CType(TreeView1.SelectedNode.Tag, JToken)
             Dim parentFolderPath As String = selectedFolder("path").ToString()
 
-            ' Check if the parent folder contains "img", "log", and "model" folders
-            If Directory.Exists(Path.Combine(parentFolderPath, "img")) OrElse
-           Directory.Exists(Path.Combine(parentFolderPath, "log")) OrElse
-           Directory.Exists(Path.Combine(parentFolderPath, "model")) Then
-                MessageBox.Show("Cannot create a new folder. Please select a parent folder.")
-                Return
-            End If
+            ' Check if the selected node is the root
+            Dim isRootNode As Boolean = (TreeView1.SelectedNode.Parent Is Nothing)
 
-            ' Show custom folder type dialog
-            Dim folderTypeDialog As New FolderTypeDialog()
-            Dim dialogResult As DialogResult = folderTypeDialog.ShowDialog()
-
-            ' Handle Cancel
-            If dialogResult = DialogResult.Cancel Then
-                Return
-            End If
-
-            ' Prompt for the new folder name
-            Dim newFolderName As String = InputBox("Enter the name for the new folder:", "New Folder")
-            If String.IsNullOrEmpty(newFolderName) Then
-                MessageBox.Show("Folder name cannot be empty.")
-                Return
-            End If
-
-            ' Create the new folder
-            Try
-                Dim newFolderPath As String = Path.Combine(parentFolderPath, newFolderName)
-                Directory.CreateDirectory(newFolderPath)
-
-                ' Initialize the JSON object
-                Dim newFolderJson As JObject
-
-                ' If the user selected Dataset, create the subfolders and include "state"
-                If dialogResult = DialogResult.No Then
-                    Directory.CreateDirectory(Path.Combine(newFolderPath, "img"))
-                    Directory.CreateDirectory(Path.Combine(newFolderPath, "log"))
-                    Directory.CreateDirectory(Path.Combine(newFolderPath, "model"))
-
-                    ' Create a placeholder subfolder inside the "img" folder
-                    Directory.CreateDirectory(Path.Combine(newFolderPath, "img", "repeats_subject"))
-
-                    ' Create the JSON object with "state"
-                    newFolderJson = New JObject(
-                    New JProperty("name", newFolderName),
-                    New JProperty("path", newFolderPath),
-                    New JProperty("state", "pending"),
-                    New JProperty("children", New JArray())
-                )
-                Else
-                    ' Create the JSON object without "state" for Parent folder
-                    newFolderJson = New JObject(
-                    New JProperty("name", newFolderName),
-                    New JProperty("path", newFolderPath),
-                    New JProperty("children", New JArray())
-                )
+            If isRootNode Then
+                ' If the root is selected, only allow Parent folder creation
+                Dim newFolderName As String = InputBox("Enter the name for the new Parent folder:", "New Parent Folder")
+                If String.IsNullOrEmpty(newFolderName) Then
+                    MessageBox.Show("Folder name cannot be empty.")
+                    Return
                 End If
 
-                ' Update the JSON structure
-                CType(selectedFolder("children"), JArray).Add(newFolderJson)
+                ' Create the new Parent folder
+                Try
+                    Dim newFolderPath As String = Path.Combine(parentFolderPath, newFolderName)
+                    Directory.CreateDirectory(newFolderPath)
 
-                ' Save the updated JSON back to the file
-                File.WriteAllText(configFilePath, config.ToString(Formatting.Indented))
+                    ' Initialize the JSON object for the Parent folder
+                    Dim newFolderJson As New JObject(
+                    New JProperty("name", newFolderName),
+                    New JProperty("path", newFolderPath),
+                    New JProperty("children", New JArray())
+                )
 
-                ' Update the tree view
-                PopulateTreeView(config("tree"))
+                    ' Update the JSON structure
+                    CType(selectedFolder("children"), JArray).Add(newFolderJson)
 
-                MessageBox.Show("New folder structure created and tree updated successfully.")
-            Catch ex As Exception
-                MessageBox.Show($"Error creating new folder: {ex.Message}")
-            End Try
+                    ' Save the updated JSON back to the file
+                    File.WriteAllText(configFilePath, config.ToString(Formatting.Indented))
+
+                    ' Update the tree view
+                    PopulateTreeView(config("tree"))
+
+                    MessageBox.Show("New Parent folder created successfully.")
+                Catch ex As Exception
+                    MessageBox.Show($"Error creating new folder: {ex.Message}")
+                End Try
+            Else
+                ' For non-root nodes, allow Parent or Dataset folder creation
+                Dim folderTypeDialog As New FolderTypeDialog()
+                Dim dialogResult As DialogResult = folderTypeDialog.ShowDialog()
+
+                ' Handle Cancel
+                If dialogResult = DialogResult.Cancel Then
+                    Return
+                End If
+
+                ' Prompt for the new folder name
+                Dim newFolderName As String = InputBox("Enter the name for the new folder:", "New Folder")
+                If String.IsNullOrEmpty(newFolderName) Then
+                    MessageBox.Show("Folder name cannot be empty.")
+                    Return
+                End If
+
+                ' Create the new folder
+                Try
+                    Dim newFolderPath As String = Path.Combine(parentFolderPath, newFolderName)
+                    Directory.CreateDirectory(newFolderPath)
+
+                    ' Initialize the JSON object
+                    Dim newFolderJson As JObject
+
+                    ' If the user selected Dataset, create the subfolders and include "state"
+                    If dialogResult = DialogResult.No Then
+                        Directory.CreateDirectory(Path.Combine(newFolderPath, "img"))
+                        Directory.CreateDirectory(Path.Combine(newFolderPath, "log"))
+                        Directory.CreateDirectory(Path.Combine(newFolderPath, "model"))
+
+                        ' Create a placeholder subfolder inside the "img" folder
+                        Directory.CreateDirectory(Path.Combine(newFolderPath, "img", "repeats_subject"))
+
+                        ' Create the JSON object with "state"
+                        newFolderJson = New JObject(
+                        New JProperty("name", newFolderName),
+                        New JProperty("path", newFolderPath),
+                        New JProperty("state", "pending"),
+                        New JProperty("children", New JArray())
+                    )
+                    Else
+                        ' Create the JSON object without "state" for Parent folder
+                        newFolderJson = New JObject(
+                        New JProperty("name", newFolderName),
+                        New JProperty("path", newFolderPath),
+                        New JProperty("children", New JArray())
+                    )
+                    End If
+
+                    ' Update the JSON structure
+                    CType(selectedFolder("children"), JArray).Add(newFolderJson)
+
+                    ' Save the updated JSON back to the file
+                    File.WriteAllText(configFilePath, config.ToString(Formatting.Indented))
+
+                    ' Update the tree view
+                    PopulateTreeView(config("tree"))
+
+                    MessageBox.Show("New folder structure created and tree updated successfully.")
+                Catch ex As Exception
+                    MessageBox.Show($"Error creating new folder: {ex.Message}")
+                End Try
+            End If
         Else
             MessageBox.Show("Please select a parent folder.")
         End If
     End Sub
+
 
     Private Sub BtnChangeKohyaFolder_Click(sender As Object, e As EventArgs) Handles BtnChangeKohyaFolder.Click
         'Open the folder selection dialog
@@ -835,10 +875,6 @@ Public Class Form1
             End If
         Next
     End Sub
-
-    Private Sub BtnUpdate_Click(sender As Object, e As EventArgs) Handles BtnUpdate.Click
-        CheckAndUpdateFolderTree()
-    End Sub
 End Class
 Public Class FolderTypeDialog
     Inherits Form
@@ -857,7 +893,7 @@ Public Class FolderTypeDialog
         Me.Size = New Size(300, 150)
 
         btnParent = New System.Windows.Forms.Button()
-        btnParent.Text = "Parent"
+        btnParent.Text = "Folder"
         btnParent.Location = New Point(20, 50)
         AddHandler btnParent.Click, AddressOf btnParent_Click
 
